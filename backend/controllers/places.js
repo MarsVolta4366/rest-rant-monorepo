@@ -4,19 +4,22 @@ const db = require("../models")
 const { Place, Comment, User } = db
 
 router.post('/', async (req, res) => {
-    if (!req.body.pic) {
-        req.body.pic = 'http://placekitten.com/400/400'
+    if (req.currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "You're not allowed to add a place" })
+    } else {
+        if (!req.body.pic) {
+            req.body.pic = 'http://placekitten.com/400/400'
+        }
+        if (!req.body.city) {
+            req.body.city = 'Anytown'
+        }
+        if (!req.body.state) {
+            req.body.state = 'USA'
+        }
+        const place = await Place.create(req.body)
+        res.json(place)
     }
-    if (!req.body.city) {
-        req.body.city = 'Anytown'
-    }
-    if (!req.body.state) {
-        req.body.state = 'USA'
-    }
-    const place = await Place.create(req.body)
-    res.json(place)
 })
-
 
 router.get('/', async (req, res) => {
     const places = await Place.findAll()
@@ -45,38 +48,46 @@ router.get('/:placeId', async (req, res) => {
 })
 
 router.put('/:placeId', async (req, res) => {
-    let placeId = Number(req.params.placeId)
-    if (isNaN(placeId)) {
-        res.status(404).json({ message: `Invalid id "${placeId}"` })
+    if (req.currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "You're not allowed to edit places" })
     } else {
-        const place = await Place.findOne({
-            where: { placeId: placeId },
-        })
-        if (!place) {
-            res.status(404).json({ message: `Could not find place with id "${placeId}"` })
+        let placeId = Number(req.params.placeId)
+        if (isNaN(placeId)) {
+            res.status(404).json({ message: `Invalid id "${placeId}"` })
         } else {
-            Object.assign(place, req.body)
-            await place.save()
-            res.json(place)
+            const place = await Place.findOne({
+                where: { placeId: placeId },
+            })
+            if (!place) {
+                res.status(404).json({ message: `Could not find place with id "${placeId}"` })
+            } else {
+                Object.assign(place, req.body)
+                await place.save()
+                res.json(place)
+            }
         }
     }
 })
 
 router.delete('/:placeId', async (req, res) => {
-    let placeId = Number(req.params.placeId)
-    if (isNaN(placeId)) {
-        res.status(404).json({ message: `Invalid id "${placeId}"` })
+    if (req.currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "You're not allowed to delete places" })
     } else {
-        const place = await Place.findOne({
-            where: {
-                placeId: placeId
-            }
-        })
-        if (!place) {
-            res.status(404).json({ message: `Could not find place with id "${placeId}"` })
+        let placeId = Number(req.params.placeId)
+        if (isNaN(placeId)) {
+            res.status(404).json({ message: `Invalid id "${placeId}"` })
         } else {
-            await place.destroy()
-            res.json(place)
+            const place = await Place.findOne({
+                where: {
+                    placeId: placeId
+                }
+            })
+            if (!place) {
+                res.status(404).json({ message: `Could not find place with id "${placeId}"` })
+            } else {
+                await place.destroy()
+                res.json(place)
+            }
         }
     }
 })
@@ -94,22 +105,22 @@ router.post('/:placeId/comments', async (req, res) => {
         res.status(404).json({ message: `Could not find place with id "${placeId}"` })
     }
 
-    const author = await User.findOne({
-        where: { userId: req.body.authorId }
-    })
-
-    if (!author) {
-        res.status(404).json({ message: `Could not find author with id "${req.body.authorId}"` })
+    // Throw error if user isn't logged in
+    if (!req.currentUser) {
+        res.status(404).json({
+            message: "You must be logged in to leave a comment"
+        })
     }
 
     const comment = await Comment.create({
         ...req.body,
+        authorId: req.currentUser.userId,
         placeId: placeId
     })
 
     res.send({
         ...comment.toJSON(),
-        author
+        author: req.currentUser
     })
 })
 
@@ -127,12 +138,15 @@ router.delete('/:placeId/comments/:commentId', async (req, res) => {
         })
         if (!comment) {
             res.status(404).json({ message: `Could not find comment with id "${commentId}" for place with id "${placeId}"` })
+        } else if (comment.authorId !== req.currentUser?.userId) {
+            res.status(403).json({
+                message: `You do not have permission to delete this comment`
+            })
         } else {
             await comment.destroy()
             res.json(comment)
         }
     }
 })
-
 
 module.exports = router

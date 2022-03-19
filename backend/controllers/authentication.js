@@ -1,7 +1,6 @@
 const router = require("express").Router()
 const db = require("../models")
 const bcrypt = require("bcrypt")
-
 const { User } = db
 
 router.post("/", async (req, res) => {
@@ -20,26 +19,7 @@ router.post("/", async (req, res) => {
 })
 
 router.get("/profile", async (req, res) => {
-    try {
-        let user = await User.findOne({
-            where: {
-                userId: req.session.userId
-            }
-        })
-        res.json(user)
-    } catch {
-        res.json(null)
-    }
+    req.currentUser ? res.json(req.currentUser) : res.json(null)
 })
-
-// router.post("/super-important-route", async (req, res) => {
-//     if(req.session.userId) {
-//         console.log("Do really important thing")
-//         res.send("Done")
-//     } else {
-//         console.log("You're not authorized")
-//         res.send("Denied")
-//     }
-// })
 
 module.exports = router
